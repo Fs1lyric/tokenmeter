@@ -1,0 +1,37 @@
+{
+  "name": "tokenmeter",
+  "version": "0.1.0",
+  "description": "Know where your LLM spend goes. A local proxy that attributes every token to a repo, branch, and model. No cloud, no account, no data leaves your machine.",
+  "type": "module",
+  "bin": {
+    "tokenmeter": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js"
+  },
+  "keywords": [
+    "llm",
+    "tokens",
+    "cost",
+    "observability",
+    "anthropic",
+    "claude",
+    "openai",
+    "finops",
+    "cli"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  }
+}
