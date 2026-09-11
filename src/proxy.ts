@@ -158,14 +158,51 @@ class StreamUsageCollector {
   }
 }
 
+/** Requests larger than this are refused rather than buffered into memory. */
+const MAX_BODY_BYTES = 64 * 1024 * 1024;
+
 /** Read a request body without assuming it's small enough to trust blindly. */
 function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => chunks.push(c));
+    let total = 0;
+
+    req.on("data", (c: Buffer) => {
+      total += c.length;
+      if (total > MAX_BODY_BYTES) {
+        reject(new Error("request body exceeds 64MB"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
+}
+
+/**
+ * Resolve the upstream URL for a request.
+ *
+ * SECURITY: the request target must never be able to choose the host. Passing
+ * `req.url` straight to `new URL(url, base)` looks right but is not — an
+ * absolute target ("http://host/p") or a protocol-relative one ("//host/p")
+ * overrides the base entirely, and since we forward the caller's credentials
+ * verbatim, that turns the proxy into a relay that leaks API keys to any host
+ * named in the path. Take only the path and query; the origin is ours alone.
+ */
+export function resolveTarget(rawUrl: string, upstream: string): URL {
+  // A throwaway opaque base: whatever authority the target tries to smuggle in
+  // is resolved against this and then discarded with it.
+  const requested = new URL(rawUrl || "/", "http://request.invalid");
+
+  const base = new URL(upstream);
+  const prefix = base.pathname.replace(/\/+$/, "");
+
+  const target = new URL(base.origin);
+  target.pathname = prefix + requested.pathname;
+  target.search = requested.search;
+  return target;
 }
 
 function perRequestContext(
@@ -209,7 +246,7 @@ export function startProxy(opts: ProxyOptions): Promise<void> {
     const ctx = perRequestContext(req, baseContext);
     const body = await readBody(req);
 
-    const target = new URL(req.url ?? "/", opts.upstream);
+    const target = resolveTarget(req.url ?? "/", opts.upstream);
 
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {

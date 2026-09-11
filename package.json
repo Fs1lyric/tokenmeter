@@ -17,7 +17,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
-    "test": "npm run build && node test/smoke.mjs && node test/ci.mjs",
+    "test": "npm run build && node test/smoke.mjs && node test/ci.mjs && node test/security.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

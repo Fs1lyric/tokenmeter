@@ -31,3 +31,6 @@ jobs:
 
       - name: CI gate test — baseline and regression detection
         run: node test/ci.mjs
+
+      - name: Security regression — no credential egress
+        run: node test/security.mjs
