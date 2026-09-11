@@ -1,5 +1,5 @@
 {
-  "name": "tokenmeter",
+  "name": "@fs1lyric/tokenmeter",
   "version": "0.1.0",
   "description": "Know where your LLM spend goes. A local proxy that attributes every token to a repo, branch, and model. No cloud, no account, no data leaves your machine.",
   "type": "module",
@@ -33,6 +33,9 @@
   ],
   "license": "MIT",
   "author": "Fs1lyric",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Fs1lyric/tokenmeter.git"

@@ -29,10 +29,12 @@ tokenmeter answers the question the invoice can't: **which part of my code is sp
 ## Install
 
 ```bash
-npm install -g tokenmeter
+npm install -g @fs1lyric/tokenmeter
 ```
 
 Requires Node 24+ (uses the built-in SQLite module). **Zero runtime dependencies.**
+
+The command is `tokenmeter`; only the package is scoped.
 
 ## Use
 
@@ -173,7 +175,7 @@ jobs:
         with:
           node-version: 24
 
-      - run: npm install -g tokenmeter
+      - run: npm install -g @fs1lyric/tokenmeter
 
       - name: Start the meter
         run: |
