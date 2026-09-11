@@ -8,12 +8,21 @@
  */
 
 import { parseArgs } from "node:util";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { clearBefore, dataDir, openDb, type GroupBy } from "./db.js";
+import { clearBefore, dataDir, openDb, type Filter, type GroupBy } from "./db.js";
 import { loadPricingOverrides, PRICING } from "./pricing.js";
 import { envVarFor, startProxy } from "./proxy.js";
-import { renderReport, renderTail } from "./report.js";
+import { renderReport, renderTail, renderVerdict } from "./report.js";
+import {
+  buildBaseline,
+  compare,
+  DEFAULT_BASELINE_PATH,
+  DEFAULT_THRESHOLDS,
+  measure,
+  parseBaseline,
+  type Thresholds,
+} from "./baseline.js";
 import { bold, cyan, dim, fmtUsd, parseDuration, table } from "./format.js";
 
 const VERSION = "0.1.0";
@@ -36,6 +45,8 @@ ${dim("COMMANDS")}
   proxy              Start the measuring proxy
   report             Show spend, grouped and summarised
   tail               Show the most recent calls
+  baseline save      Record current cost-per-call as a baseline
+  ci                 Compare against the baseline; exit 1 on regression
   models             List known models and their prices
   prune              Delete records older than a cutoff
   where              Print the data directory
@@ -53,11 +64,24 @@ ${dim("REPORT OPTIONS")}
   --limit <n>        Max rows                       ${dim("(default 20)")}
   --json             Emit JSON instead of a table
 
+${dim("CI OPTIONS")}
+  --file <path>            Baseline file    ${dim("(default .tokenmeter-baseline.json)")}
+  --max-increase <pct>     Fail above this rise in cost/call  ${dim("(default 15%)")}
+  --max-cost-per-call <n>  Absolute USD ceiling per call
+  --max-cache-drop <pct>   Fail if the cache hit rate falls this much
+  --min-calls <n>          Fail if fewer calls than this were seen
+  --tag / --repo / --branch / --model   Narrow to one slice of traffic
+
 ${dim("EXAMPLES")}
   ${cyan("tokenmeter proxy --budget 5")}
   ${cyan("export ANTHROPIC_BASE_URL=http://127.0.0.1:8787")}
   ${cyan("tokenmeter report --since 24h --by branch")}
   ${cyan("tokenmeter tail --limit 10")}
+
+  ${dim("# on main, after running your evals through the proxy")}
+  ${cyan("tokenmeter baseline save --since 1h --tag evals")}
+  ${dim("# on a PR branch, after the same run")}
+  ${cyan("tokenmeter ci --max-increase 10%")}
 
 ${dim("ATTRIBUTION")}
   Repo and branch are read from git where the proxy was started.
@@ -80,6 +104,30 @@ function loadOverrides(): void {
 function fail(message: string): never {
   process.stderr.write(`\n  ${message}\n\n`);
   process.exit(1);
+}
+
+/** Collect the --tag/--repo/--branch/--model narrowing flags. */
+function filterFrom(values: Record<string, unknown>): Filter {
+  const filter: Filter = {};
+  for (const key of ["tag", "repo", "branch", "model"] as const) {
+    const value = values[key];
+    if (typeof value === "string" && value.length > 0) filter[key] = value;
+  }
+  return filter;
+}
+
+function describeFilter(filter: Filter): string {
+  const parts = Object.entries(filter).map(([k, v]) => `${k}=${String(v)}`);
+  return parts.length > 0 ? ` matching ${parts.join(", ")}` : "";
+}
+
+/** Accept both `15%` and `0.15` for threshold flags. */
+function parsePercent(input: string): number {
+  const trimmed = input.trim();
+  if (trimmed.endsWith("%")) {
+    return Number(trimmed.slice(0, -1)) / 100;
+  }
+  return Number(trimmed);
 }
 
 async function main(): Promise<void> {
@@ -111,6 +159,15 @@ async function main(): Promise<void> {
       json: { type: "boolean", default: false },
       before: { type: "string" },
       yes: { type: "boolean", default: false },
+      file: { type: "string" },
+      tag: { type: "string" },
+      repo: { type: "string" },
+      branch: { type: "string" },
+      model: { type: "string" },
+      "max-increase": { type: "string" },
+      "max-cost-per-call": { type: "string" },
+      "min-calls": { type: "string" },
+      "max-cache-drop": { type: "string" },
     },
   });
 
@@ -258,6 +315,119 @@ async function main(): Promise<void> {
       db.close();
       process.stdout.write(`\n  Deleted ${deleted} records older than ${beforeRaw}.\n\n`);
       return;
+    }
+
+    case "baseline": {
+      const sub = argv[1];
+      if (sub !== "save" && sub !== "show") {
+        fail(`Usage: tokenmeter baseline save|show [options]`);
+      }
+
+      const path = values.file ?? DEFAULT_BASELINE_PATH;
+
+      if (sub === "show") {
+        try {
+          const b = parseBaseline(readFileSync(path, "utf8"));
+          process.stdout.write(JSON.stringify(b, null, 2) + "\n");
+        } catch (err) {
+          fail(
+            `Could not read baseline at ${path}: ` +
+              (err instanceof Error ? err.message : String(err)),
+          );
+        }
+        return;
+      }
+
+      const sinceRaw = values.since ?? "1h";
+      const windowMs = parseDuration(sinceRaw);
+      if (windowMs === null) {
+        fail(`Invalid --since "${sinceRaw}". Try 30m, 1h, or 24h.`);
+      }
+
+      const filter = filterFrom(values);
+      const db = openDb();
+      const measured = measure(db, Date.now() - windowMs, filter);
+      db.close();
+
+      if (measured.metrics.calls === 0) {
+        fail(
+          `No calls recorded in the last ${sinceRaw}` +
+            `${describeFilter(filter)}. Nothing to baseline.`,
+        );
+      }
+
+      const baseline = buildBaseline(sinceRaw, filter, measured);
+      writeFileSync(path, JSON.stringify(baseline, null, 2) + "\n");
+
+      process.stdout.write(
+        `\n  Baseline written to ${bold(path)}\n` +
+          dim(
+            `  ${measured.metrics.calls} calls · ` +
+              `${fmtUsd(measured.metrics.costPerCall)} per call · ` +
+              `${(measured.metrics.cacheHitRate * 100).toFixed(0)}% cache hit rate\n`,
+          ) +
+          dim(`  Commit this file so CI can compare against it.\n\n`),
+      );
+      return;
+    }
+
+    case "ci": {
+      const path = values.file ?? DEFAULT_BASELINE_PATH;
+
+      let baseline;
+      try {
+        baseline = parseBaseline(readFileSync(path, "utf8"));
+      } catch (err) {
+        fail(
+          `Could not read baseline at ${path}: ` +
+            (err instanceof Error ? err.message : String(err)) +
+            `\n  Record one with: tokenmeter baseline save`,
+        );
+      }
+
+      // Default to the same window and filter the baseline used, so the two
+      // sides of the comparison are measured the same way unless overridden.
+      const sinceRaw = values.since ?? baseline.window;
+      const windowMs = parseDuration(sinceRaw);
+      if (windowMs === null) {
+        fail(`Invalid --since "${sinceRaw}".`);
+      }
+
+      const explicit = filterFrom(values);
+      const filter = Object.keys(explicit).length > 0 ? explicit : baseline.filter;
+
+      const thresholds: Thresholds = {
+        maxIncrease: values["max-increase"]
+          ? parsePercent(values["max-increase"])
+          : DEFAULT_THRESHOLDS.maxIncrease,
+        maxCostPerCall: values["max-cost-per-call"]
+          ? Number(values["max-cost-per-call"])
+          : DEFAULT_THRESHOLDS.maxCostPerCall,
+        minCalls: values["min-calls"]
+          ? Number(values["min-calls"])
+          : DEFAULT_THRESHOLDS.minCalls,
+        maxCacheDrop: values["max-cache-drop"]
+          ? parsePercent(values["max-cache-drop"])
+          : DEFAULT_THRESHOLDS.maxCacheDrop,
+      };
+
+      if (!Number.isFinite(thresholds.maxIncrease)) {
+        fail(`Invalid --max-increase "${values["max-increase"]}". Try 15% or 0.15.`);
+      }
+
+      const db = openDb();
+      const current = measure(db, Date.now() - windowMs, filter);
+      db.close();
+
+      const verdict = compare(baseline, current.metrics, thresholds);
+
+      if (values.json === true) {
+        process.stdout.write(JSON.stringify(verdict, null, 2) + "\n");
+      } else {
+        process.stdout.write(renderVerdict(verdict));
+      }
+
+      process.exit(verdict.passed ? 0 : 1);
     }
 
     case "where": {

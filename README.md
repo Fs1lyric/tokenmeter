@@ -63,6 +63,8 @@ That's the whole workflow. No SDK to import, no code to wrap, no decorators. Bec
 | `tokenmeter proxy` | Start the measuring proxy |
 | `tokenmeter report` | Spend, summarised and grouped |
 | `tokenmeter tail` | The most recent calls, live |
+| `tokenmeter baseline save` | Record current cost-per-call as a baseline |
+| `tokenmeter ci` | Compare against the baseline; exit 1 on regression |
 | `tokenmeter models` | Known models and their prices |
 | `tokenmeter prune` | Delete old records |
 | `tokenmeter where` | Print the data directory |
@@ -103,6 +105,93 @@ TOKENMETER_TAG=nightly-eval python run_evals.py
 ```
 
 This is how you find out that 19% of your bill is a test suite nobody remembers scheduling.
+
+## Cost regression testing in CI
+
+Stop a PR that quietly triples your inference bill.
+
+On `main`, after running your evals through the proxy:
+
+```bash
+tokenmeter baseline save --since 1h --tag evals
+git add .tokenmeter-baseline.json && git commit -m "chore: record cost baseline"
+```
+
+On a PR branch, after the same run:
+
+```bash
+tokenmeter ci --max-increase 10%
+```
+
+```
+  METRIC                BASELINE  CURRENT  CHANGE
+  cost / call            $0.0105  $0.0150  +42.9%
+  input tokens / call       1.0K     1.6K  +60.0%
+  output tokens / call       500      500    0.0%
+  cache hit rate               0%       0%      —
+
+  20 calls this run · 20 in the baseline
+
+  FAIL  Cost regression detected.
+        Cost per call rose 42.9%, over the 10% threshold.
+```
+
+Exit code `1`. The build fails.
+
+**The metric is cost *per call*, not total cost.** Total cost moves whenever you add a test case, which makes it useless as a gate — adding coverage would look like a regression. Cost per call isolates the thing you actually control.
+
+### Gates
+
+| Flag | Fails when |
+|---|---|
+| `--max-increase 10%` | Cost per call rose more than 10% |
+| `--max-cost-per-call 0.05` | Any run exceeds $0.05 per call, regardless of baseline |
+| `--max-cache-drop 50%` | Cache hit rate fell by more than half |
+| `--min-calls 20` | Fewer than 20 calls recorded — catches a run where the proxy saw no traffic |
+
+`--max-cache-drop` deserves its own gate. A broken prompt prefix can crater your hit rate while cost per call barely moves — cheap cached tokens silently repriced as expensive fresh ones. It looks fine until traffic scales:
+
+```
+  cost / call             $0.015   $0.016   +4.7%     ← gate passes
+  cache hit rate             88%      16%  -81.9%     ← the actual problem
+```
+
+Without the flag that's a warning. With it, it fails the build.
+
+### GitHub Actions
+
+```yaml
+name: cost
+on: pull_request
+
+jobs:
+  cost-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm install -g tokenmeter
+
+      - name: Start the meter
+        run: |
+          tokenmeter proxy &
+          sleep 1
+
+      - name: Run evals through it
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:8787
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TOKENMETER_TAG: evals
+        run: npm run evals
+
+      - name: Check for cost regression
+        run: tokenmeter ci --max-increase 10% --min-calls 20
+```
+
+Each CI run starts with an empty database, so the window only ever contains that run's calls. Use `--json` if you'd rather post the verdict as a PR comment than fail the build.
 
 ## Providers
 
@@ -157,15 +246,18 @@ Two invariants the proxy holds:
 ```bash
 npm install
 npm run build
-node test/smoke.mjs
+npm test
 ```
 
-The smoke test stands up a fake upstream, runs the real proxy against it, and asserts the recorded cost against hand-computed figures — including the cache-write and cache-read multipliers.
+Two suites, no test framework:
+
+- `test/smoke.mjs` stands up a fake upstream, runs the real proxy against it, and asserts recorded cost against hand-computed figures — including the cache-write (1.25x) and cache-read (0.1x) multipliers.
+- `test/ci.mjs` simulates the real CI shape: a baseline recorded on one machine, the PR run measured on a fresh one, then asserts the exit codes.
 
 ## Roadmap
 
 - `tokenmeter watch` — live TUI
-- CI mode: fail a build when a PR increases cost-per-request beyond a threshold
+- PR comment output for the CI verdict
 - Team sync (opt-in, self-hostable) — the only thing that would ever touch the network
 
 ## License

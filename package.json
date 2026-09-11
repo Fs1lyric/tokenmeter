@@ -16,7 +16,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "test": "npm run build && node test/smoke.mjs && node test/ci.mjs",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "llm",

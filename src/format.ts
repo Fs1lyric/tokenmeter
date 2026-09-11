@@ -15,6 +15,7 @@ export const bold = wrap("1");
 export const green = wrap("32");
 export const yellow = wrap("33");
 export const cyan = wrap("36");
+export const red = wrap("31");
 
 /**
  * Money, at a precision that matches the magnitude. Sub-cent amounts are the
