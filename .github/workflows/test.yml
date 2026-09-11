@@ -1,0 +1,33 @@
+name: test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # node:sqlite is only stable from 24 onward — test the floor and current.
+        node: [24, 26]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - run: npm ci
+
+      - name: Typecheck and build
+        run: npm run build
+
+      - name: Smoke test — proxy forwarding and cost accounting
+        run: node test/smoke.mjs
+
+      - name: CI gate test — baseline and regression detection
+        run: node test/ci.mjs
