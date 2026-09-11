@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#F2F3F1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101315" media="(prefers-color-scheme: dark)">
 <title>tokenmeter — know where your LLM spend goes</title>
 <meta name="description" content="A local proxy that attributes every token to a model, repo, and branch — and fails CI on cost regressions. Zero dependencies, nothing leaves your machine.">
 
@@ -108,7 +110,41 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Let native scrollbars, form controls and the caret follow the theme. */
+  color-scheme: light dark;
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: color-mix(in srgb, var(--signal) 18%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+/* The masthead is sticky at 58px; without this every in-page jump parks the
+   heading underneath it. */
+:target,
+[id] { scroll-margin-top: 5.25rem; }
+
+button, a, summary { touch-action: manipulation; }
+
+/* Keyboard users get to the content without tabbing the whole nav. */
+.skip {
+  position: absolute;
+  inset-inline-start: 0.5rem;
+  inset-block-start: -4rem;
+  z-index: 50;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--signal);
+  border-radius: 3px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: inset-block-start 160ms ease;
+}
+.skip:focus { inset-block-start: 0.5rem; }
 
 body {
   margin: 0;
@@ -425,11 +461,15 @@ code, kbd, samp, pre { font-family: var(--mono); }
 .share::before {
   content: "";
   position: absolute;
-  inset-block: 2px; inset-inline-end: 0;
-  width: var(--w, 0%);
+  inset-block: 2px;
+  inset-inline: 0;
   background: var(--signal);
   opacity: 0.16;
-  transition: width 900ms cubic-bezier(.2,.7,.2,1);
+  /* scaleX rather than width: stays on the compositor. Origin is the right
+     edge so the bar grows back from the figure it belongs to. */
+  transform: scaleX(var(--s, 0));
+  transform-origin: 100% 50%;
+  transition: transform 900ms cubic-bezier(.2,.7,.2,1);
 }
 
 /* -------------------------------------------------------------- section -- */
@@ -639,9 +679,11 @@ footer .spacer { margin-inline-start: auto; }
 </head>
 <body>
 
+<a class="skip" href="#top">Skip to content</a>
+
 <header class="masthead">
   <div class="wrap">
-    <a class="wordmark" href="#top"><span class="dial" aria-hidden="true"></span>tokenmeter</a>
+    <a class="wordmark" href="#top" translate="no"><span class="dial" aria-hidden="true"></span>tokenmeter</a>
     <nav>
       <a href="#how">How it works</a>
       <a href="#finding" class="hide-sm">The catch it found</a>
@@ -659,8 +701,8 @@ footer .spacer { margin-inline-start: auto; }
       <div>
         <h1>Know where your LLM spend goes.</h1>
         <p class="deck">
-          Your provider's dashboard gives you <strong>one number for the whole org, a day late</strong>.
-          It can't tell you that your eval suite is 19% of the bill, or that the branch you
+          Your provider’s dashboard gives you <strong>one number for the whole org, a day late</strong>.
+          It can’t tell you that your eval suite is 19% of the bill, or that the branch you
           merged on Tuesday doubled your input tokens.
         </p>
 
@@ -678,7 +720,7 @@ footer .spacer { margin-inline-start: auto; }
 
         <p class="reqs label">
           <span>Zero runtime dependencies</span>
-          <span>Node 24+</span>
+          <span>Node 24+</span>
           <span>MIT</span>
         </p>
       </div>
@@ -707,9 +749,9 @@ footer .spacer { margin-inline-start: auto; }
               <tr><th scope="col">Tag</th><th scope="col">Cost</th><th scope="col">Share</th><th scope="col">Calls</th></tr>
             </thead>
             <tbody>
-              <tr><td>chat-api</td>   <td>$15.34</td><td><span class="share" style="--w:74%">74%</span></td><td>529</td></tr>
-              <tr><td>eval-suite</td> <td>$4.03</td> <td><span class="share" style="--w:19%">19%</span></td><td>153</td></tr>
-              <tr><td>classifier</td> <td>$1.33</td> <td><span class="share" style="--w:6%">6%</span></td> <td>242</td></tr>
+              <tr><td>chat-api</td>   <td>$15.34</td><td><span class="share" style="--s:.74">74%</span></td><td>529</td></tr>
+              <tr><td>eval-suite</td> <td>$4.03</td> <td><span class="share" style="--s:.19">19%</span></td><td>153</td></tr>
+              <tr><td>classifier</td> <td>$1.33</td> <td><span class="share" style="--s:.06">6%</span></td> <td>242</td></tr>
             </tbody>
           </table>
         </div>
@@ -722,9 +764,9 @@ footer .spacer { margin-inline-start: auto; }
     <div class="wrap">
       <div class="band-head">
         <span class="label">How it works</span>
-        <h2>One environment variable. That's the integration.</h2>
+        <h2>One environment variable. That’s the integration.</h2>
         <p>
-          No SDK to import, nothing to wrap, no decorators to forget. Because it's a proxy,
+          No SDK to import, nothing to wrap, no decorators to forget. Because it’s a proxy,
           it works from any language and any client — Python, TypeScript, Go, curl.
         </p>
       </div>
@@ -800,7 +842,7 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
             At that traffic volume it looked fine. At ten times the traffic it would not have
             been. A pure cost gate would never have caught it — which is why
             <code>--max-cache-drop</code> is its own gate, and why a collapse warns even
-            when you haven't asked it to fail.
+            when you haven’t asked it to fail.
           </p>
         </div>
       </div>
@@ -856,7 +898,7 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
     <div class="wrap">
       <div class="band-head">
         <span class="label">Privacy</span>
-        <h2>It sits in front of your API key. So here's exactly what it does.</h2>
+        <h2>It sits in front of your API key. So here’s exactly what it does.</h2>
       </div>
 
       <div class="guarantees">
@@ -884,8 +926,8 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
         <div class="guarantee">
           <span class="mark" aria-hidden="true">✓</span>
           <div>
-            <h3>Metering can't break a request</h3>
-            <p>Bytes are forwarded before they're measured. An accounting bug costs a data point, never a response.</p>
+            <h3>Metering can’t break a request</h3>
+            <p>Bytes are forwarded before they’re measured. An accounting bug costs a data point, never a response.</p>
           </div>
         </div>
       </div>
@@ -910,6 +952,10 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
 
 </main>
 
+<!-- Announces clipboard results, which are otherwise silent to screen readers. -->
+<p id="copy-status" role="status" aria-live="polite"
+   style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap"></p>
+
 <footer>
   <div class="wrap">
     <span>MIT licensed</span>
@@ -925,17 +971,26 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
   "use strict";
 
   /* Copy buttons — confirm in place, then quietly revert. */
+  var status = document.getElementById("copy-status");
+
   document.querySelectorAll(".copy").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var target = document.querySelector(btn.dataset.copy);
       if (!target) return;
-      navigator.clipboard.writeText(target.textContent.trim()).then(function () {
-        var was = btn.textContent;
-        btn.textContent = "Copied";
-        setTimeout(function () { btn.textContent = was; }, 1600);
-      }).catch(function () {
-        btn.textContent = "Press ⌘C";
-      });
+
+      var announce = function (msg) {
+        btn.textContent = msg;
+        // Spoken by the live region; the button text alone is not announced.
+        if (status) status.textContent = msg;
+        setTimeout(function () {
+          btn.textContent = "Copy";
+          if (status) status.textContent = "";
+        }, 1600);
+      };
+
+      navigator.clipboard.writeText(target.textContent.trim())
+        .then(function () { announce("Copied"); })
+        .catch(function () { announce("Press ⌘ C"); });
     });
   });
 
