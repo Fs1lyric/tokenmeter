@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tokenmeter — know where your LLM spend goes</title>
+<meta name="description" content="A local proxy that attributes every token to a model, repo, and branch — and fails CI on cost regressions. Zero dependencies, nothing leaves your machine.">
+
+<meta property="og:title" content="tokenmeter">
+<meta property="og:description" content="Know where your LLM spend goes. A local proxy that attributes every token to a model, repo, and branch — and fails CI on cost regressions.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fs1lyric.github.io/tokenmeter/">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600&display=swap">
+
+<style>
+/* ---------------------------------------------------------------- tokens --
+   Light is the complete palette on bare :root. Dark redefines only tokens,
+   twice: once for the un-stamped system default, once for an explicit stamp.
+   No component ever declares a colour outside this block.                   */
+
+:root {
+  --paper:      #F2F3F1;
+  --surface:    #FFFFFF;
+  --sunk:       #E7E9E6;
+  --ink:        #16191C;
+  --ink-soft:   #4E545A;
+  --ink-faint:  #878E93;
+  --rule:       #D6D9D6;
+  --rule-soft:  #E4E7E3;
+
+  --signal:     #B45816;
+  --signal-lo:  #F3E2D4;
+  --savings:    #0E7C7B;
+  --savings-lo: #D8EBEA;
+  --alarm:      #A32F26;
+
+  --panel-ink:  #E9EBE8;
+  --panel-bg:   #1A1E21;
+  --panel-rule: #313940;
+  --panel-dim:  #79838B;
+
+  --shadow: 0 1px 2px rgb(22 25 28 / .05), 0 8px 24px -12px rgb(22 25 28 / .14);
+
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --display: "Archivo", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --measure: 62ch;
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --max: 1080px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #101315;
+    --surface:    #171B1E;
+    --sunk:       #1D2225;
+    --ink:        #E7EAE7;
+    --ink-soft:   #A6AEB3;
+    --ink-faint:  #767F85;
+    --rule:       #2A3034;
+    --rule-soft:  #21272A;
+
+    --signal:     #E08A3C;
+    --signal-lo:  #2E2117;
+    --savings:    #4FB9B1;
+    --savings-lo: #142A29;
+    --alarm:      #E0695C;
+
+    --panel-ink:  #E9EBE8;
+    --panel-bg:   #080A0B;
+    --panel-rule: #262D32;
+    --panel-dim:  #6E777E;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .7);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:      #101315;
+  --surface:    #171B1E;
+  --sunk:       #1D2225;
+  --ink:        #E7EAE7;
+  --ink-soft:   #A6AEB3;
+  --ink-faint:  #767F85;
+  --rule:       #2A3034;
+  --rule-soft:  #21272A;
+
+  --signal:     #E08A3C;
+  --signal-lo:  #2E2117;
+  --savings:    #4FB9B1;
+  --savings-lo: #142A29;
+  --alarm:      #E0695C;
+
+  --panel-ink:  #E9EBE8;
+  --panel-bg:   #080A0B;
+  --panel-rule: #262D32;
+  --panel-dim:  #6E777E;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .7);
+}
+
+/* ----------------------------------------------------------------- base -- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: clamp(1rem, 0.97rem + 0.14vw, 1.0625rem);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  font-synthesis-weight: none;
+}
+
+h1, h2, h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+  margin: 0;
+  line-height: 1.08;
+}
+
+p { margin: 0; max-width: var(--measure); }
+a { color: inherit; }
+
+:where(a, button, summary):focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+code, kbd, samp, pre { font-family: var(--mono); }
+
+.wrap {
+  width: 100%;
+  max-width: var(--max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* A small uppercase label. Used only where it names a real field. */
+.label {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.num { font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------- header -- */
+
+.masthead {
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.masthead .wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 58px;
+}
+
+.wordmark {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.0625rem;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The dial: a literal meter needle, the page's one piece of iconography. */
+.dial {
+  width: 15px; height: 15px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  position: relative;
+  flex: none;
+}
+.dial::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%; inset-inline-start: 50%;
+  width: 5.5px; height: 1.5px;
+  background: var(--signal);
+  transform-origin: 0 50%;
+  transform: rotate(-52deg);
+}
+
+.masthead nav {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.75rem, 2.5vw, 1.5rem);
+  font-size: 0.875rem;
+}
+.masthead nav a { color: var(--ink-soft); text-decoration: none; }
+.masthead nav a:hover { color: var(--ink); }
+.masthead .hide-sm { display: none; }
+@media (min-width: 620px) { .masthead .hide-sm { display: inline; } }
+
+/* ----------------------------------------------------------------- hero -- */
+
+.hero { padding-block: clamp(3rem, 8vw, 5.5rem) clamp(2.5rem, 6vw, 4rem); }
+
+.hero h1 {
+  font-size: clamp(2.4rem, 1.4rem + 4.4vw, 4.25rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  max-width: 15ch;
+}
+
+.hero .deck {
+  margin-block-start: 1.25rem;
+  font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
+  color: var(--ink-soft);
+  max-width: 54ch;
+}
+
+.hero .deck strong { color: var(--ink); font-weight: 600; }
+
+.hero-grid {
+  display: grid;
+  gap: clamp(2rem, 5vw, 3.5rem);
+  align-items: start;
+}
+@media (min-width: 940px) {
+  .hero-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr); }
+}
+
+/* ------------------------------------------------------------- install -- */
+
+.install {
+  margin-block-start: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  align-items: center;
+}
+
+.cmd {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.6rem 0.75rem 0.6rem 0.9rem;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+.cmd .prompt { color: var(--signal); user-select: none; }
+.cmd code { overflow-x: auto; white-space: nowrap; }
+
+.copy {
+  font: inherit;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background: none;
+  border: 0;
+  border-left: 1px solid var(--rule);
+  padding: 0.2rem 0 0.2rem 0.75rem;
+  cursor: pointer;
+  flex: none;
+}
+.copy:hover { color: var(--signal); }
+
+.ghlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+  padding-block-end: 2px;
+}
+.ghlink:hover { color: var(--ink); border-color: var(--signal); }
+
+.reqs {
+  margin-block-start: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+}
+.reqs span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.reqs span::before {
+  content: "";
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--signal);
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- panel --
+   The readout. Dark in both themes on purpose: it is a terminal, and the
+   page treats it as a physical instrument face set into the paper.        */
+
+.panel {
+  background: var(--panel-bg);
+  color: var(--panel-ink);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  font-family: var(--mono);
+  font-size: clamp(0.75rem, 0.68rem + 0.3vw, 0.875rem);
+  line-height: 1.65;
+  overflow: hidden;
+  border: 1px solid var(--panel-rule);
+}
+
+.panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--panel-rule);
+  font-size: 0.6875rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--panel-dim);
+}
+.panel-bar .lamp {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--signal);
+  flex: none;
+}
+.panel-body { padding: 0.95rem 0.85rem 1.15rem; overflow-x: auto; }
+.panel-cmd { color: var(--panel-dim); margin-block-end: 0.85rem; }
+.panel-cmd .prompt { color: var(--signal); }
+
+.readout {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(2rem, 1.3rem + 3vw, 3rem);
+  letter-spacing: -0.035em;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.readout .since {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--panel-dim);
+  text-transform: uppercase;
+}
+
+.subline { color: var(--panel-dim); margin-block-start: 0.5rem; }
+
+.saved {
+  color: var(--savings);
+  margin-block-start: 0.7rem;
+  display: block;
+}
+
+.spark {
+  margin-block-start: 0.9rem;
+  color: var(--signal);
+  letter-spacing: 0.06em;
+  font-size: 1rem;
+}
+
+.ledger { width: 100%; border-collapse: collapse; margin-block-start: 1.15rem; }
+.ledger caption {
+  text-align: start;
+  color: var(--panel-dim);
+  font-size: 0.6875rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  padding-block-end: 0.45rem;
+}
+.ledger th {
+  text-align: end;
+  font-weight: 400;
+  color: var(--panel-dim);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-block-end: 0.35rem;
+  border-bottom: 1px solid var(--panel-rule);
+}
+.ledger th:first-child { text-align: start; }
+.ledger td {
+  padding-block: 0.3rem;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ledger td:first-child { text-align: start; color: var(--panel-ink); }
+.ledger tbody tr + tr td { border-top: 1px solid var(--panel-rule); }
+
+/* The share bar sits behind the row as a hairline fill, not a chart. */
+.share {
+  position: relative;
+  display: inline-block;
+  min-width: 3.25rem;
+  text-align: end;
+}
+.share::before {
+  content: "";
+  position: absolute;
+  inset-block: 2px; inset-inline-end: 0;
+  width: var(--w, 0%);
+  background: var(--signal);
+  opacity: 0.16;
+  transition: width 900ms cubic-bezier(.2,.7,.2,1);
+}
+
+/* -------------------------------------------------------------- section -- */
+
+.band { border-top: 1px solid var(--rule); }
+.band > .wrap { padding-block: clamp(3rem, 7vw, 4.75rem); }
+
+.band-head { margin-block-end: clamp(1.75rem, 4vw, 2.5rem); }
+.band-head h2 {
+  font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.3rem);
+  margin-block-start: 0.6rem;
+  max-width: 20ch;
+}
+.band-head p { margin-block-start: 0.9rem; color: var(--ink-soft); }
+
+/* -------------------------------------------------------------- process --
+   Numbered because it is a real sequence: the middle step is the only one
+   that touches your app, and the order is load-bearing.                   */
+
+.steps {
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+  border-block: 1px solid var(--rule);
+}
+@media (min-width: 800px) { .steps { grid-template-columns: repeat(3, 1fr); } }
+
+.step { background: var(--paper); padding: 1.5rem 1.35rem 1.65rem; }
+.step .n {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  color: var(--signal);
+}
+.step h3 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  margin-block-start: 0.7rem;
+}
+.step p { font-size: 0.9375rem; color: var(--ink-soft); margin-block-start: 0.45rem; }
+.step pre {
+  margin: 0.9rem 0 0;
+  background: var(--sunk);
+  border-radius: 3px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- story --
+   The cache-collapse finding. The page's strongest argument, so it gets the
+   most space and the only two-colour data treatment.                      */
+
+.finding {
+  display: grid;
+  gap: clamp(1.75rem, 4vw, 3rem);
+  align-items: center;
+}
+@media (min-width: 900px) { .finding { grid-template-columns: 1fr 1.15fr; } }
+
+.diff {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.diff table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 0.8125rem; }
+.diff th {
+  font-weight: 500;
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: end;
+  padding: 0.75rem 0.9rem 0.6rem;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.diff th:first-child { text-align: start; }
+.diff td {
+  padding: 0.85rem 0.9rem;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.diff td:first-child { text-align: start; color: var(--ink-soft); }
+.diff tbody tr + tr td { border-top: 1px solid var(--rule-soft); }
+.diff .note {
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  padding: 0.6rem 0.9rem 0.75rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  background: var(--sunk);
+}
+.ok  { color: var(--savings); }
+.bad { color: var(--alarm); font-weight: 500; }
+.row-flag td { background: color-mix(in srgb, var(--alarm) 7%, transparent); }
+
+.pull {
+  font-family: var(--display);
+  font-size: clamp(1.15rem, 1rem + 0.8vw, 1.5rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  max-width: 24ch;
+  border-left: 2px solid var(--signal);
+  padding-left: 1.1rem;
+  margin-block: 1.5rem;
+}
+.finding p + p { margin-block-start: 1rem; }
+.finding p { color: var(--ink-soft); }
+
+/* ------------------------------------------------------------------- ci -- */
+
+.ci-out {
+  font-family: var(--mono);
+  font-size: clamp(0.75rem, 0.7rem + 0.22vw, 0.8125rem);
+  background: var(--panel-bg);
+  color: var(--panel-ink);
+  border: 1px solid var(--panel-rule);
+  border-radius: 4px;
+  padding: 1rem 0.95rem;
+  overflow-x: auto;
+  box-shadow: var(--shadow);
+  line-height: 1.7;
+}
+.ci-out .fail { color: var(--alarm); font-weight: 600; }
+.ci-out .dim { color: var(--panel-dim); }
+
+.gates { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; margin-block-start: 1.5rem; }
+@media (min-width: 700px) { .gates { grid-template-columns: 1fr 1fr; } }
+.gate { background: var(--surface); padding: 1rem 1.1rem; }
+.gate code {
+  font-size: 0.8125rem;
+  color: var(--signal);
+  font-weight: 500;
+}
+.gate p { font-size: 0.875rem; color: var(--ink-soft); margin-block-start: 0.35rem; }
+
+/* -------------------------------------------------------------- privacy -- */
+
+.guarantees { display: grid; gap: 1.5rem 2.5rem; }
+@media (min-width: 760px) { .guarantees { grid-template-columns: 1fr 1fr; } }
+.guarantee { display: grid; grid-template-columns: auto 1fr; gap: 0.9rem; align-items: start; }
+.guarantee .mark {
+  width: 20px; height: 20px;
+  border: 1px solid var(--savings);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--savings);
+  font-size: 0.6875rem;
+  flex: none;
+  margin-block-start: 2px;
+}
+.guarantee h3 { font-size: 0.9375rem; font-weight: 600; font-family: var(--sans); letter-spacing: 0; }
+.guarantee p { font-size: 0.875rem; color: var(--ink-soft); margin-block-start: 0.2rem; }
+
+/* ----------------------------------------------------------------- flow -- */
+
+.flow {
+  font-family: var(--mono);
+  font-size: clamp(0.6875rem, 0.62rem + 0.3vw, 0.8125rem);
+  line-height: 1.9;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.15rem 1rem;
+  overflow-x: auto;
+  color: var(--ink-soft);
+  margin-block-start: 1.5rem;
+}
+.flow b { color: var(--signal); font-weight: 500; }
+
+/* --------------------------------------------------------------- closing -- */
+
+.closing { text-align: center; }
+.closing h2 { font-size: clamp(1.8rem, 1.3rem + 2.2vw, 2.75rem); margin-inline: auto; }
+.closing p { margin-inline: auto; margin-block-start: 1rem; color: var(--ink-soft); }
+.closing .install { justify-content: center; margin-block-start: 2rem; }
+
+footer { border-top: 1px solid var(--rule); }
+footer .wrap {
+  padding-block: 2rem 3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+}
+footer a { color: var(--ink-soft); text-decoration: none; border-bottom: 1px solid var(--rule); }
+footer a:hover { color: var(--signal); }
+footer .spacer { margin-inline-start: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <a class="wordmark" href="#top"><span class="dial" aria-hidden="true"></span>tokenmeter</a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#finding" class="hide-sm">The catch it found</a>
+      <a href="#ci">CI gate</a>
+      <a href="https://github.com/Fs1lyric/tokenmeter">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ───────────────────────────────────────────────────────────── hero -- -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <h1>Know where your LLM spend goes.</h1>
+        <p class="deck">
+          Your provider's dashboard gives you <strong>one number for the whole org, a day late</strong>.
+          It can't tell you that your eval suite is 19% of the bill, or that the branch you
+          merged on Tuesday doubled your input tokens.
+        </p>
+
+        <div class="install">
+          <div class="cmd">
+            <span class="prompt" aria-hidden="true">$</span>
+            <code id="install-cmd">npm install -g @fs1lyric/tokenmeter</code>
+            <button class="copy" type="button" data-copy="#install-cmd">Copy</button>
+          </div>
+          <a class="ghlink" href="https://github.com/Fs1lyric/tokenmeter">
+            Source on GitHub
+            <span aria-hidden="true">↗</span>
+          </a>
+        </div>
+
+        <p class="reqs label">
+          <span>Zero runtime dependencies</span>
+          <span>Node 24+</span>
+          <span>MIT</span>
+        </p>
+      </div>
+
+      <!-- The instrument face. Real output from `tokenmeter report --by tag`. -->
+      <div class="panel" role="img"
+           aria-label="Terminal output: 20 dollars 70 cents spent over 7 days across 924 calls. Prompt caching saved 24 dollars 77 cents, 54 percent off an uncached 45 dollars 47 cents. By tag: chat-api 15.34 at 74 percent, eval-suite 4.03 at 19 percent, classifier 1.33 at 6 percent.">
+        <div class="panel-bar"><span class="lamp"></span> metering · localhost:8787</div>
+        <div class="panel-body">
+          <div class="panel-cmd"><span class="prompt">$</span> tokenmeter report --by tag</div>
+
+          <!-- Final values are the markup default: if the script never runs,
+               the panel still reads correctly. The count-up is enhancement. -->
+          <div class="readout">
+            <span class="num" id="odo" data-to="20.70">$20.70</span>
+            <span class="since">over 7d</span>
+          </div>
+          <div class="subline num">924 calls · 1.54M in · 697.4K out</div>
+          <strong class="saved">Prompt caching saved <span class="num" id="odo-saved" data-to="24.77">$24.77</span> <span style="opacity:.7">(54% off $45.47 uncached)</span></strong>
+
+          <div class="spark" aria-hidden="true">▄▆▇▇▇█▆▅</div>
+
+          <table class="ledger">
+            <caption>By tag</caption>
+            <thead>
+              <tr><th scope="col">Tag</th><th scope="col">Cost</th><th scope="col">Share</th><th scope="col">Calls</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>chat-api</td>   <td>$15.34</td><td><span class="share" style="--w:74%">74%</span></td><td>529</td></tr>
+              <tr><td>eval-suite</td> <td>$4.03</td> <td><span class="share" style="--w:19%">19%</span></td><td>153</td></tr>
+              <tr><td>classifier</td> <td>$1.33</td> <td><span class="share" style="--w:6%">6%</span></td> <td>242</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────────────────────────────────────────────────────────── how -- -->
+  <section class="band" id="how">
+    <div class="wrap">
+      <div class="band-head">
+        <span class="label">How it works</span>
+        <h2>One environment variable. That's the integration.</h2>
+        <p>
+          No SDK to import, nothing to wrap, no decorators to forget. Because it's a proxy,
+          it works from any language and any client — Python, TypeScript, Go, curl.
+        </p>
+      </div>
+
+      <div class="steps">
+        <article class="step">
+          <div class="n">STEP 01</div>
+          <h3>Start the meter</h3>
+          <p>Binds to localhost. Writes to a SQLite file in your home directory.</p>
+          <pre><code>tokenmeter proxy</code></pre>
+        </article>
+        <article class="step">
+          <div class="n">STEP 02</div>
+          <h3>Point your app at it</h3>
+          <p>The only line of your project that changes. Everything else runs as it did.</p>
+          <pre><code>export ANTHROPIC_BASE_URL=\
+  http://127.0.0.1:8787</code></pre>
+        </article>
+        <article class="step">
+          <div class="n">STEP 03</div>
+          <h3>Read the meter</h3>
+          <p>Group by model, repo, branch, day, or your own tag.</p>
+          <pre><code>tokenmeter report --by branch</code></pre>
+        </article>
+      </div>
+
+      <div class="flow" aria-label="Architecture: your app sends requests to tokenmeter, which forwards them to the provider API and records usage to a local SQLite file.">
+your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
+                    │
+                    └──►  ~/.tokenmeter/usage.db
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────────── the finding -- -->
+  <section class="band" id="finding">
+    <div class="wrap">
+      <div class="band-head">
+        <span class="label">Why the cache gate exists</span>
+        <h2>The regression a cost gate misses.</h2>
+      </div>
+
+      <div class="finding">
+        <div class="diff">
+          <table>
+            <thead>
+              <tr><th scope="col">Metric</th><th scope="col">Baseline</th><th scope="col">Current</th><th scope="col">Change</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>cost / call</td><td class="num">$0.015</td><td class="num">$0.016</td>
+                <td class="num ok">+4.7%</td>
+              </tr>
+              <tr class="row-flag">
+                <td>cache hit rate</td><td class="num">88%</td><td class="num">16%</td>
+                <td class="num bad">−81.9%</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">Cost gate: <span class="ok">passed</span>. The build went green.</p>
+        </div>
+
+        <div>
+          <p>
+            This showed up while testing the CI gate. Cost per call barely moved, so the
+            threshold held and the build passed.
+          </p>
+          <p class="pull">
+            But the prompt prefix had broken, and cached tokens were quietly being repriced
+            as fresh ones.
+          </p>
+          <p>
+            At that traffic volume it looked fine. At ten times the traffic it would not have
+            been. A pure cost gate would never have caught it — which is why
+            <code>--max-cache-drop</code> is its own gate, and why a collapse warns even
+            when you haven't asked it to fail.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────── ci -- -->
+  <section class="band" id="ci">
+    <div class="wrap">
+      <div class="band-head">
+        <span class="label">Cost regression testing</span>
+        <h2>Fail the build before the bill.</h2>
+        <p>
+          Record a baseline on <code>main</code>, commit it, and let CI compare every pull
+          request against it. The metric is cost <em>per call</em>, not total cost — total moves
+          whenever you add a test case, so gating on it would flag new coverage as a regression.
+        </p>
+      </div>
+
+      <pre class="ci-out"><code>  METRIC                BASELINE  CURRENT  CHANGE
+  cost / call            $0.0105  $0.0150  +42.9%
+  input tokens / call       1.0K     1.6K  +60.0%
+  output tokens / call       500      500    0.0%
+
+  <span class="dim">20 calls this run · 20 in the baseline</span>
+
+  <span class="fail">FAIL</span>  Cost regression detected.
+        Cost per call rose 42.9%, over the 10% threshold.</code></pre>
+
+      <div class="gates">
+        <div class="gate">
+          <code>--max-increase 10%</code>
+          <p>Cost per call rose more than 10% against the baseline.</p>
+        </div>
+        <div class="gate">
+          <code>--max-cost-per-call 0.05</code>
+          <p>Any run exceeds five cents per call, regardless of baseline.</p>
+        </div>
+        <div class="gate">
+          <code>--max-cache-drop 50%</code>
+          <p>Cache hit rate fell by more than half. The gate above.</p>
+        </div>
+        <div class="gate">
+          <code>--min-calls 20</code>
+          <p>Fewer than 20 calls recorded — catches a run where the proxy saw no traffic.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────────────────── privacy -- -->
+  <section class="band">
+    <div class="wrap">
+      <div class="band-head">
+        <span class="label">Privacy</span>
+        <h2>It sits in front of your API key. So here's exactly what it does.</h2>
+      </div>
+
+      <div class="guarantees">
+        <div class="guarantee">
+          <span class="mark" aria-hidden="true">✓</span>
+          <div>
+            <h3>Your key is forwarded, never stored</h3>
+            <p>Credentials pass through untouched. They are never logged, written to disk, or inspected.</p>
+          </div>
+        </div>
+        <div class="guarantee">
+          <span class="mark" aria-hidden="true">✓</span>
+          <div>
+            <h3>Prompts are never read</h3>
+            <p>Only token counts, model ids, and timing. Message bodies are forwarded as opaque bytes.</p>
+          </div>
+        </div>
+        <div class="guarantee">
+          <span class="mark" aria-hidden="true">✓</span>
+          <div>
+            <h3>Nothing leaves your machine</h3>
+            <p>No account, no telemetry, no update check. The tool makes no outbound requests of its own.</p>
+          </div>
+        </div>
+        <div class="guarantee">
+          <span class="mark" aria-hidden="true">✓</span>
+          <div>
+            <h3>Metering can't break a request</h3>
+            <p>Bytes are forwarded before they're measured. An accounting bug costs a data point, never a response.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────────────── closing -- -->
+  <section class="band">
+    <div class="wrap closing">
+      <h2>Find out which branch tripled your bill.</h2>
+      <p>One install, one environment variable, and the next report tells you.</p>
+
+      <div class="install">
+        <div class="cmd">
+          <span class="prompt" aria-hidden="true">$</span>
+          <code id="install-cmd-2">npm install -g @fs1lyric/tokenmeter</code>
+          <button class="copy" type="button" data-copy="#install-cmd-2">Copy</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>MIT licensed</span>
+    <a href="https://github.com/Fs1lyric/tokenmeter">GitHub</a>
+    <a href="https://www.npmjs.com/package/@fs1lyric/tokenmeter">npm</a>
+    <a href="https://github.com/Fs1lyric/tokenmeter/issues">Issues</a>
+    <span class="spacer num">Prices current as of 2026-09-11</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* Copy buttons — confirm in place, then quietly revert. */
+  document.querySelectorAll(".copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var target = document.querySelector(btn.dataset.copy);
+      if (!target) return;
+      navigator.clipboard.writeText(target.textContent.trim()).then(function () {
+        var was = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(function () { btn.textContent = was; }, 1600);
+      }).catch(function () {
+        btn.textContent = "Press ⌘C";
+      });
+    });
+  });
+
+  /* The odometer. A meter counting up is the subject's own gesture, so the
+     hero earns one — but it is strictly an enhancement: the markup already
+     holds the final figures, and nothing below ever leaves a number lower
+     than where it started. */
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var odos = [].slice.call(document.querySelectorAll("[data-to]"));
+
+  function tick(el, ms, delay) {
+    var target = parseFloat(el.dataset.to);
+    if (isNaN(target)) return;
+
+    var start = null;
+    function frame(now) {
+      if (start === null) start = now;
+      var t = Math.min((now - start) / ms, 1);
+      // Ease out cubic: fast intake, settling needle.
+      var eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = "$" + (target * eased).toFixed(2);
+      if (t < 1) requestAnimationFrame(frame);
+      else el.textContent = "$" + target.toFixed(2);
+    }
+
+    el.textContent = "$0.00";
+    setTimeout(function () { requestAnimationFrame(frame); }, delay);
+  }
+
+  var ran = false;
+  function run() {
+    if (ran || reduced || odos.length === 0) return;
+    ran = true;
+    tick(odos[0], 1100, 0);
+    if (odos[1]) tick(odos[1], 900, 420);
+  }
+
+  var panel = document.querySelector(".panel");
+  if (panel && "IntersectionObserver" in window && !reduced) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { run(); io.disconnect(); }
+      });
+    }, { threshold: 0.35 });
+    io.observe(panel);
+
+    // If the observer never reports — a background tab, a browser that isn't
+    // compositing — the markup values simply stand. Give it one chance, then
+    // stop waiting rather than animating into a page nobody is looking at.
+    setTimeout(function () { io.disconnect(); }, 4000);
+  }
+})();
+</script>
+
+</body>
+</html>
