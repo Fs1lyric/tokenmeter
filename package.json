@@ -32,6 +32,15 @@
     "cli"
   ],
   "license": "MIT",
+  "author": "Fs1lyric",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fs1lyric/tokenmeter.git"
+  },
+  "homepage": "https://github.com/Fs1lyric/tokenmeter#readme",
+  "bugs": {
+    "url": "https://github.com/Fs1lyric/tokenmeter/issues"
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "^5.7.0"
