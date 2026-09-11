@@ -30,11 +30,11 @@
   --sunk:       #E7E9E6;
   --ink:        #16191C;
   --ink-soft:   #4E545A;
-  --ink-faint:  #878E93;
+  --ink-faint:  #646B71;
   --rule:       #D6D9D6;
   --rule-soft:  #E4E7E3;
 
-  --signal:     #B45816;
+  --signal:     #A64F11;
   --signal-lo:  #F3E2D4;
   --savings:    #0E7C7B;
   --savings-lo: #D8EBEA;
@@ -43,7 +43,8 @@
   --panel-ink:  #E9EBE8;
   --panel-bg:   #1A1E21;
   --panel-rule: #313940;
-  --panel-dim:  #79838B;
+  --panel-dim:  #949EA5;
+  --panel-savings: #3FB0A8;
 
   --shadow: 0 1px 2px rgb(22 25 28 / .05), 0 8px 24px -12px rgb(22 25 28 / .14);
 
@@ -76,7 +77,8 @@
     --panel-ink:  #E9EBE8;
     --panel-bg:   #080A0B;
     --panel-rule: #262D32;
-    --panel-dim:  #6E777E;
+    --panel-dim:  #949EA5;
+    --panel-savings: #3FB0A8;
 
     --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .7);
   }
@@ -101,7 +103,8 @@
   --panel-ink:  #E9EBE8;
   --panel-bg:   #080A0B;
   --panel-rule: #262D32;
-  --panel-dim:  #6E777E;
+  --panel-dim:  #949EA5;
+  --panel-savings: #3FB0A8;
 
   --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .7);
 }
@@ -410,16 +413,28 @@ code, kbd, samp, pre { font-family: var(--mono); }
 .subline { color: var(--panel-dim); margin-block-start: 0.5rem; }
 
 .saved {
-  color: var(--savings);
+  color: var(--panel-savings);
   margin-block-start: 0.7rem;
   display: block;
 }
 
-.spark {
+.trend {
   margin-block-start: 0.9rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.spark {
   color: var(--signal);
   letter-spacing: 0.06em;
   font-size: 1rem;
+}
+.trend-range {
+  color: var(--panel-dim);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .ledger { width: 100%; border-collapse: collapse; margin-block-start: 1.15rem; }
@@ -570,6 +585,7 @@ code, kbd, samp, pre { font-family: var(--mono); }
 }
 .ok  { color: var(--savings); }
 .bad { color: var(--alarm); font-weight: 500; }
+.flag { display: inline-block; margin-inline-end: 0.35rem; font-size: 0.75em; }
 .row-flag td { background: color-mix(in srgb, var(--alarm) 7%, transparent); }
 
 .pull {
@@ -741,7 +757,11 @@ footer .spacer { margin-inline-start: auto; }
           <div class="subline num">924 calls · 1.54M in · 697.4K out</div>
           <strong class="saved">Prompt caching saved <span class="num" id="odo-saved" data-to="24.77">$24.77</span> <span style="opacity:.7">(54% off $45.47 uncached)</span></strong>
 
-          <div class="spark" aria-hidden="true">▄▆▇▇▇█▆▅</div>
+          <!-- A trend mark needs its range named, or it reads as decoration. -->
+          <div class="trend">
+            <span class="spark" aria-hidden="true">▄▆▇▇▇█▆▅</span>
+            <span class="trend-range">daily cost · 04 Sep → 11 Sep</span>
+          </div>
 
           <table class="ledger">
             <caption>By tag</caption>
@@ -816,17 +836,19 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
               <tr><th scope="col">Metric</th><th scope="col">Baseline</th><th scope="col">Current</th><th scope="col">Change</th></tr>
             </thead>
             <tbody>
+              <!-- Status is never colour alone: each row carries a glyph and a
+                   word as well as its hue. -->
               <tr>
                 <td>cost / call</td><td class="num">$0.015</td><td class="num">$0.016</td>
-                <td class="num ok">+4.7%</td>
+                <td class="num ok"><span class="flag" aria-hidden="true">✓</span>+4.7%</td>
               </tr>
               <tr class="row-flag">
                 <td>cache hit rate</td><td class="num">88%</td><td class="num">16%</td>
-                <td class="num bad">−81.9%</td>
+                <td class="num bad"><span class="flag" aria-hidden="true">▲</span>−81.9%</td>
               </tr>
             </tbody>
           </table>
-          <p class="note">Cost gate: <span class="ok">passed</span>. The build went green.</p>
+          <p class="note">Cost gate <span class="ok">passed</span> — the build went green. Cache hit rate <span class="bad">flagged</span>, and only <code>--max-cache-drop</code> fails on it.</p>
         </div>
 
         <div>
