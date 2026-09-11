@@ -117,10 +117,49 @@ const TOTALS_SELECT = `
   COALESCE(SUM(uncached_cost_usd),0)  AS uncachedCostUsd
 `;
 
-export function totalsSince(db: DatabaseSync, sinceMs: number): Totals {
+/**
+ * Narrows a query to one slice of traffic. Used by CI, where you want to
+ * measure the eval suite without the dev-server calls that ran alongside it.
+ */
+export interface Filter {
+  tag?: string | undefined;
+  repo?: string | undefined;
+  branch?: string | undefined;
+  model?: string | undefined;
+}
+
+function whereClause(filter: Filter | undefined): {
+  sql: string;
+  params: string[];
+} {
+  if (!filter) return { sql: "", params: [] };
+
+  const clauses: string[] = [];
+  const params: string[] = [];
+
+  for (const column of ["tag", "repo", "branch", "model"] as const) {
+    const value = filter[column];
+    if (value !== undefined) {
+      clauses.push(`${column} = ?`);
+      params.push(value);
+    }
+  }
+
+  return {
+    sql: clauses.length > 0 ? ` AND ${clauses.join(" AND ")}` : "",
+    params,
+  };
+}
+
+export function totalsSince(
+  db: DatabaseSync,
+  sinceMs: number,
+  filter?: Filter,
+): Totals {
+  const { sql, params } = whereClause(filter);
   const row = db
-    .prepare(`SELECT ${TOTALS_SELECT} FROM calls WHERE ts >= ?`)
-    .get(sinceMs) as Record<string, number> | undefined;
+    .prepare(`SELECT ${TOTALS_SELECT} FROM calls WHERE ts >= ?${sql}`)
+    .get(sinceMs, ...params) as Record<string, number> | undefined;
 
   return {
     calls: row?.["calls"] ?? 0,
@@ -149,17 +188,20 @@ export function groupedSince(
   sinceMs: number,
   by: GroupBy,
   limit = 50,
+  filter?: Filter,
 ): GroupedRow[] {
   const expr = GROUP_EXPR[by];
+  const { sql, params } = whereClause(filter);
+
   const rows = db
     .prepare(
       `SELECT ${expr} AS key, ${TOTALS_SELECT}
-       FROM calls WHERE ts >= ?
+       FROM calls WHERE ts >= ?${sql}
        GROUP BY key
        ORDER BY costUsd DESC
        LIMIT ?`,
     )
-    .all(sinceMs, limit) as unknown as GroupedRow[];
+    .all(sinceMs, ...params, limit) as unknown as GroupedRow[];
 
   return rows;
 }

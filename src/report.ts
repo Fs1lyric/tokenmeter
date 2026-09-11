@@ -13,6 +13,7 @@ import {
   type Totals,
 } from "./db.js";
 import { priceFor } from "./pricing.js";
+import type { Verdict } from "./baseline.js";
 import {
   bold,
   cyan,
@@ -21,6 +22,7 @@ import {
   fmtTokens,
   fmtUsd,
   green,
+  red,
   sparkline,
   table,
   yellow,
@@ -135,6 +137,67 @@ export function renderReport(db: DatabaseSync, opts: ReportOptions): string {
   }
 
   out.push("");
+  return out.join("\n");
+}
+
+/**
+ * CI output. Written to be readable in a GitHub Actions log: no colour
+ * dependence, the verdict on its own line, failures spelled out.
+ */
+export function renderVerdict(v: Verdict): string {
+  const out: string[] = [""];
+
+  const pct = (d: { change: number | null }): string => {
+    if (d.change === null) return "—";
+    const sign = d.change >= 0 ? "+" : "";
+    return `${sign}${(d.change * 100).toFixed(1)}%`;
+  };
+
+  const fmtMetric = (label: string, value: number): string => {
+    if (label === "cost / call") return fmtUsd(value);
+    if (label === "cache hit rate") return fmtPct(value);
+    return fmtTokens(Math.round(value));
+  };
+
+  out.push(
+    table(
+      [
+        { header: "METRIC" },
+        { header: "BASELINE", align: "right" },
+        { header: "CURRENT", align: "right" },
+        { header: "CHANGE", align: "right" },
+      ],
+      v.deltas.map((d) => [
+        d.label,
+        fmtMetric(d.label, d.before),
+        fmtMetric(d.label, d.after),
+        pct(d),
+      ]),
+    ),
+  );
+
+  out.push("");
+  out.push(
+    dim(
+      `  ${v.currentMetrics.calls} calls this run · ` +
+        `${v.baselineMetrics.calls} in the baseline`,
+    ),
+  );
+
+  for (const w of v.warnings) {
+    out.push("");
+    out.push(`  ${yellow("warning")}  ${w}`);
+  }
+
+  out.push("");
+  if (v.passed) {
+    out.push(`  ${green("PASS")}  No cost regression.`);
+  } else {
+    out.push(`  ${red("FAIL")}  Cost regression detected.`);
+    for (const f of v.failures) out.push(`         ${f}`);
+  }
+  out.push("");
+
   return out.join("\n");
 }
 
