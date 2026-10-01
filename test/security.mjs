@@ -31,7 +31,7 @@ function check(name, fn) {
 
 // ─────────────────────────────────────────────────── unit: target resolution
 
-console.log("\ntarget resolution — the host is never caller-controlled");
+console.log("\ntarget resolution - the host is never caller-controlled");
 
 const UP = "https://api.anthropic.com";
 
@@ -69,7 +69,7 @@ check("an empty target resolves to the upstream root", () => {
 
 // ────────────────────────────────────────────── integration: no key egress
 
-console.log("\nintegration — the API key reaches nobody else");
+console.log("\nintegration - the API key reaches nobody else");
 
 const HOME = mkdtempSync(join(tmpdir(), "tm-sec-"));
 const ATTACKER = 19401, UPSTREAM = 19402, PROXY = 19403;

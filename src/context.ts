@@ -1,5 +1,5 @@
 /**
- * Attribution context — which repo and branch a call should be charged to.
+ * Attribution context - which repo and branch a call should be charged to.
  *
  * Resolved once when the proxy starts, from the directory it was launched in.
  * Callers can override per-request with an `x-tokenmeter-tag` header, which is

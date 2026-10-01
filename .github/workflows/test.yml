@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        # node:sqlite is only stable from 24 onward — test the floor and current.
+        # node:sqlite is only stable from 24 onward - test the floor and current.
         node: [24, 26]
 
     steps:
@@ -26,11 +26,11 @@ jobs:
       - name: Typecheck and build
         run: npm run build
 
-      - name: Smoke test — proxy forwarding and cost accounting
+      - name: Smoke test - proxy forwarding and cost accounting
         run: node test/smoke.mjs
 
-      - name: CI gate test — baseline and regression detection
+      - name: CI gate test - baseline and regression detection
         run: node test/ci.mjs
 
-      - name: Security regression — no credential egress
+      - name: Security regression - no credential egress
         run: node test/security.mjs

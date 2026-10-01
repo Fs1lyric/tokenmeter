@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * tokenmeter — know where your LLM spend goes.
+ * tokenmeter - know where your LLM spend goes.
  *
  * Everything is local: a proxy writes to a SQLite file in ~/.tokenmeter and the
  * report commands read it back. No account, no telemetry, no network calls of
@@ -36,7 +36,7 @@ const GROUP_KEYS: GroupBy[] = ["model", "repo", "branch", "tag", "day", "provide
 
 function usage(): string {
   return `
-${bold("tokenmeter")} ${dim(`v${VERSION}`)} — know where your LLM spend goes
+${bold("tokenmeter")} ${dim(`v${VERSION}`)} - know where your LLM spend goes
 
 ${dim("USAGE")}
   tokenmeter <command> [options]

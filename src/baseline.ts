@@ -2,8 +2,7 @@
  * Cost regression testing.
  *
  * The unit of comparison is **cost per call**, not total cost. Total cost moves
- * whenever the number of test cases changes, which makes it useless as a gate —
- * adding a test would look like a regression. Cost per call isolates the thing
+ * whenever the number of test cases changes, which makes it useless as a gate - * adding a test would look like a regression. Cost per call isolates the thing
  * you actually control: how expensive each request is.
  *
  * A baseline is a small JSON file you commit to the repo. CI reads it, measures
@@ -110,7 +109,7 @@ export interface Thresholds {
   minCalls: number;
   /**
    * Fail if the cache hit rate fell by more than this fraction of its baseline
-   * value. 0 disables — a collapse is then only a warning.
+   * value. 0 disables - a collapse is then only a warning.
    *
    * Worth gating on separately from cost: a broken cache prefix can crater the
    * hit rate while cost per call barely moves, then bite once traffic scales.
@@ -193,7 +192,7 @@ export function compare(
     );
   }
 
-  // Falling cache hit rate usually precedes a cost rise — surface it even when
+  // Falling cache hit rate usually precedes a cost rise - surface it even when
   // this run still passes on cost, and gate on it when asked to.
   if (base.cacheHitRate > 0.01) {
     const drop = (base.cacheHitRate - current.cacheHitRate) / base.cacheHitRate;
@@ -203,7 +202,7 @@ export function compare(
 
     if (thresholds.maxCacheDrop > 0 && drop > thresholds.maxCacheDrop) {
       failures.push(
-        `${describe} — a ${(drop * 100).toFixed(0)}% fall, over the ` +
+        `${describe} - a ${(drop * 100).toFixed(0)}% fall, over the ` +
           `${(thresholds.maxCacheDrop * 100).toFixed(0)}% threshold.`,
       );
     } else if (drop > 0.5) {

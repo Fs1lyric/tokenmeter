@@ -1,6 +1,5 @@
 /**
- * Terminal formatting helpers. Kept dependency-free and colour-optional —
- * output is piped into scripts as often as it's read by a human.
+ * Terminal formatting helpers. Kept dependency-free and colour-optional - * output is piped into scripts as often as it's read by a human.
  */
 
 const useColor =

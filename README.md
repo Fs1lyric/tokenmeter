@@ -1,6 +1,6 @@
 # tokenmeter
 
-**Know where your LLM spend goes.** A local proxy that attributes every token to a model, repo, branch, and feature — then tells you what prompt caching is actually saving you.
+**Know where your LLM spend goes.** A local proxy that attributes every token to a model, repo, branch, and feature - then tells you what prompt caching is actually saving you.
 
 No account. No dashboard to log into. No data leaves your machine.
 
@@ -44,7 +44,7 @@ Start the proxy:
 tokenmeter proxy
 ```
 
-Point your app at it — this is the only change you make:
+Point your app at it - this is the only change you make:
 
 ```bash
 export ANTHROPIC_BASE_URL=http://127.0.0.1:8787
@@ -56,7 +56,7 @@ Run your app normally. Then:
 tokenmeter report
 ```
 
-That's the whole workflow. No SDK to import, no code to wrap, no decorators. Because it's a proxy, it works with **any language and any SDK** — Python, TypeScript, Go, curl, whatever.
+That's the whole workflow. No SDK to import, no code to wrap, no decorators. Because it's a proxy, it works with **any language and any SDK** - Python, TypeScript, Go, curl, whatever.
 
 ## Commands
 
@@ -130,9 +130,7 @@ tokenmeter ci --max-increase 10%
   cost / call            $0.0105  $0.0150  +42.9%
   input tokens / call       1.0K     1.6K  +60.0%
   output tokens / call       500      500    0.0%
-  cache hit rate               0%       0%      —
-
-  20 calls this run · 20 in the baseline
+  cache hit rate               0%       0% - 20 calls this run · 20 in the baseline
 
   FAIL  Cost regression detected.
         Cost per call rose 42.9%, over the 10% threshold.
@@ -140,7 +138,7 @@ tokenmeter ci --max-increase 10%
 
 Exit code `1`. The build fails.
 
-**The metric is cost *per call*, not total cost.** Total cost moves whenever you add a test case, which makes it useless as a gate — adding coverage would look like a regression. Cost per call isolates the thing you actually control.
+**The metric is cost *per call*, not total cost.** Total cost moves whenever you add a test case, which makes it useless as a gate - adding coverage would look like a regression. Cost per call isolates the thing you actually control.
 
 ### Gates
 
@@ -149,9 +147,9 @@ Exit code `1`. The build fails.
 | `--max-increase 10%` | Cost per call rose more than 10% |
 | `--max-cost-per-call 0.05` | Any run exceeds $0.05 per call, regardless of baseline |
 | `--max-cache-drop 50%` | Cache hit rate fell by more than half |
-| `--min-calls 20` | Fewer than 20 calls recorded — catches a run where the proxy saw no traffic |
+| `--min-calls 20` | Fewer than 20 calls recorded - catches a run where the proxy saw no traffic |
 
-`--max-cache-drop` deserves its own gate. A broken prompt prefix can crater your hit rate while cost per call barely moves — cheap cached tokens silently repriced as expensive fresh ones. It looks fine until traffic scales:
+`--max-cache-drop` deserves its own gate. A broken prompt prefix can crater your hit rate while cost per call barely moves - cheap cached tokens silently repriced as expensive fresh ones. It looks fine until traffic scales:
 
 ```
   cost / call             $0.015   $0.016   +4.7%     ← gate passes
@@ -199,7 +197,7 @@ Each CI run starts with an empty database, so the window only ever contains that
 
 | Provider | Status |
 |---|---|
-| Anthropic | Full support — streaming, non-streaming, prompt caching |
+| Anthropic | Full support - streaming, non-streaming, prompt caching |
 | OpenAI | Usage capture (set `--provider openai`; pass `stream_options: {include_usage: true}` for streamed calls) |
 
 Any OpenAI-compatible endpoint works with `--upstream`.
@@ -236,7 +234,7 @@ your app  ──►  tokenmeter  ──►  api.anthropic.com
                     └──►  ~/.tokenmeter/usage.db
 ```
 
-Requests are forwarded byte-for-byte. On the way back, tokenmeter reads the `usage` block — from the JSON body for normal calls, or from the `message_start` / `message_delta` events for streamed ones — and writes a row.
+Requests are forwarded byte-for-byte. On the way back, tokenmeter reads the `usage` block - from the JSON body for normal calls, or from the `message_start` / `message_delta` events for streamed ones - and writes a row.
 
 Two invariants the proxy holds:
 
@@ -253,14 +251,14 @@ npm test
 
 Two suites, no test framework:
 
-- `test/smoke.mjs` stands up a fake upstream, runs the real proxy against it, and asserts recorded cost against hand-computed figures — including the cache-write (1.25x) and cache-read (0.1x) multipliers.
+- `test/smoke.mjs` stands up a fake upstream, runs the real proxy against it, and asserts recorded cost against hand-computed figures - including the cache-write (1.25x) and cache-read (0.1x) multipliers.
 - `test/ci.mjs` simulates the real CI shape: a baseline recorded on one machine, the PR run measured on a fresh one, then asserts the exit codes.
 
 ## Roadmap
 
-- `tokenmeter watch` — live TUI
+- `tokenmeter watch` - live TUI
 - PR comment output for the CI verdict
-- Team sync (opt-in, self-hostable) — the only thing that would ever touch the network
+- Team sync (opt-in, self-hostable) - the only thing that would ever touch the network
 
 ## License
 

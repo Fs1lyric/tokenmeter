@@ -17,7 +17,7 @@ export interface ModelPrice {
   cacheWriteMultiplier: number;
   /**
    * Multiplier on the input rate for tokens read from the prompt cache.
-   * Anthropic charges ~0.1x to read — this is where the savings show up.
+   * Anthropic charges ~0.1x to read - this is where the savings show up.
    */
   cacheReadMultiplier: number;
 }
@@ -29,7 +29,7 @@ const ANTHROPIC_CACHE = {
 
 /** Prices verified 2026-09-11. */
 export const PRICING: Record<string, ModelPrice> = {
-  // Anthropic — Claude
+  // Anthropic - Claude
   "claude-fable-5": { input: 10.0, output: 50.0, ...ANTHROPIC_CACHE },
   "claude-mythos-5": { input: 10.0, output: 50.0, ...ANTHROPIC_CACHE },
   "claude-opus-5": { input: 5.0, output: 25.0, ...ANTHROPIC_CACHE },
@@ -123,7 +123,7 @@ export function costOf(model: string, usage: TokenUsage): number {
 }
 
 /**
- * What the same call would have cost with no prompt caching — cache reads
+ * What the same call would have cost with no prompt caching - cache reads
  * repriced at the full input rate, cache writes without the 1.25x premium.
  * The difference between this and `costOf` is what caching actually saved.
  */

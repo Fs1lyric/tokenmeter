@@ -86,7 +86,7 @@ export function renderReport(db: DatabaseSync, opts: ReportOptions): string {
 
   const out: string[] = [summaryBlock(totals, opts.windowLabel), ""];
 
-  // Daily trend — only meaningful across more than one day.
+  // Daily trend - only meaningful across more than one day.
   const series = dailySeries(db, opts.sinceMs);
   if (series.length > 1) {
     const spark = sparkline(series.map((d) => d.costUsd));
@@ -148,7 +148,7 @@ export function renderVerdict(v: Verdict): string {
   const out: string[] = [""];
 
   const pct = (d: { change: number | null }): string => {
-    if (d.change === null) return "—";
+    if (d.change === null) return "-";
     const sign = d.change >= 0 ? "+" : "";
     return `${sign}${(d.change * 100).toFixed(1)}%`;
   };
@@ -211,10 +211,10 @@ export function renderTail(db: DatabaseSync, limit: number): string {
   const rows = calls.map((c) => [
     new Date(c.ts).toLocaleTimeString(),
     c.model,
-    c.branch ?? c.repo ?? "—",
+    c.branch ?? c.repo ?? "-",
     fmtTokens(c.inputTokens),
     fmtTokens(c.outputTokens),
-    c.cacheReadTokens > 0 ? fmtTokens(c.cacheReadTokens) : "—",
+    c.cacheReadTokens > 0 ? fmtTokens(c.cacheReadTokens) : "-",
     fmtUsd(c.costUsd),
     `${c.latencyMs}ms`,
   ]);

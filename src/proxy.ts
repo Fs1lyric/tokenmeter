@@ -32,7 +32,7 @@ const HOP_BY_HOP = new Set([
   "content-length",
 ]);
 
-/** Our own control headers — consumed here, never sent upstream. */
+/** Our own control headers - consumed here, never sent upstream. */
 const CONTROL_PREFIX = "x-tokenmeter-";
 
 export interface ProxyOptions {
@@ -93,7 +93,7 @@ function parseUsageFromJson(body: string): { model: string; usage: TokenUsage } 
  * Accumulates usage across a Server-Sent Events stream.
  *
  * Anthropic reports input/cache tokens on `message_start` and the running
- * output count on each `message_delta` — the last delta wins rather than
+ * output count on each `message_delta` - the last delta wins rather than
  * summing, because the field is cumulative, not incremental.
  */
 class StreamUsageCollector {
@@ -185,7 +185,7 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
  * Resolve the upstream URL for a request.
  *
  * SECURITY: the request target must never be able to choose the host. Passing
- * `req.url` straight to `new URL(url, base)` looks right but is not — an
+ * `req.url` straight to `new URL(url, base)` looks right but is not - an
  * absolute target ("http://host/p") or a protocol-relative one ("//host/p")
  * overrides the base entirely, and since we forward the caller's credentials
  * verbatim, that turns the proxy into a relay that leaks API keys to any host
@@ -287,7 +287,7 @@ export function startProxy(opts: ProxyOptions): Promise<void> {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        // Forward first — metering must never delay or alter the stream.
+        // Forward first - metering must never delay or alter the stream.
         res.write(Buffer.from(value));
         try {
           collector.push(decoder.decode(value, { stream: true }));
@@ -309,7 +309,7 @@ export function startProxy(opts: ProxyOptions): Promise<void> {
     }
 
     // A response with no usage block (an error, a non-messages endpoint) is
-    // not spend — don't write a zero row that dilutes the averages.
+    // not spend - don't write a zero row that dilutes the averages.
     if (!model && usage.inputTokens === 0 && usage.outputTokens === 0) return;
 
     const record: CallRecord = {

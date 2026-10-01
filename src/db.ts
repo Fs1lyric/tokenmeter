@@ -206,7 +206,7 @@ export function groupedSince(
   return rows;
 }
 
-/** Cost per calendar day, oldest first — used to draw the sparkline. */
+/** Cost per calendar day, oldest first - used to draw the sparkline. */
 export function dailySeries(
   db: DatabaseSync,
   sinceMs: number,

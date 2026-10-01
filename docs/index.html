@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#F2F3F1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101315" media="(prefers-color-scheme: dark)">
-<title>tokenmeter — know where your LLM spend goes</title>
-<meta name="description" content="A local proxy that attributes every token to a model, repo, and branch — and fails CI on cost regressions. Zero dependencies, nothing leaves your machine.">
+<title>tokenmeter - know where your LLM spend goes</title>
+<meta name="description" content="A local proxy that attributes every token to a model, repo, and branch - and fails CI on cost regressions. Zero dependencies, nothing leaves your machine.">
 
 <meta property="og:title" content="tokenmeter">
-<meta property="og:description" content="Know where your LLM spend goes. A local proxy that attributes every token to a model, repo, and branch — and fails CI on cost regressions.">
+<meta property="og:description" content="Know where your LLM spend goes. A local proxy that attributes every token to a model, repo, and branch - and fails CI on cost regressions.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://fs1lyric.github.io/tokenmeter/">
 <meta name="twitter:card" content="summary_large_image">
@@ -787,7 +787,7 @@ footer .spacer { margin-inline-start: auto; }
         <h2>One environment variable. That’s the integration.</h2>
         <p>
           No SDK to import, nothing to wrap, no decorators to forget. Because it’s a proxy,
-          it works from any language and any client — Python, TypeScript, Go, curl.
+          it works from any language and any client - Python, TypeScript, Go, curl.
         </p>
       </div>
 
@@ -848,7 +848,7 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
               </tr>
             </tbody>
           </table>
-          <p class="note">Cost gate <span class="ok">passed</span> — the build went green. Cache hit rate <span class="bad">flagged</span>, and only <code>--max-cache-drop</code> fails on it.</p>
+          <p class="note">Cost gate <span class="ok">passed</span> - the build went green. Cache hit rate <span class="bad">flagged</span>, and only <code>--max-cache-drop</code> fails on it.</p>
         </div>
 
         <div>
@@ -862,7 +862,7 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
           </p>
           <p>
             At that traffic volume it looked fine. At ten times the traffic it would not have
-            been. A pure cost gate would never have caught it — which is why
+            been. A pure cost gate would never have caught it - which is why
             <code>--max-cache-drop</code> is its own gate, and why a collapse warns even
             when you haven’t asked it to fail.
           </p>
@@ -879,7 +879,7 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
         <h2>Fail the build before the bill.</h2>
         <p>
           Record a baseline on <code>main</code>, commit it, and let CI compare every pull
-          request against it. The metric is cost <em>per call</em>, not total cost — total moves
+          request against it. The metric is cost <em>per call</em>, not total cost - total moves
           whenever you add a test case, so gating on it would flag new coverage as a regression.
         </p>
       </div>
@@ -909,7 +909,7 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
         </div>
         <div class="gate">
           <code>--min-calls 20</code>
-          <p>Fewer than 20 calls recorded — catches a run where the proxy saw no traffic.</p>
+          <p>Fewer than 20 calls recorded - catches a run where the proxy saw no traffic.</p>
         </div>
       </div>
     </div>
@@ -992,7 +992,7 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
 (function () {
   "use strict";
 
-  /* Copy buttons — confirm in place, then quietly revert. */
+  /* Copy buttons - confirm in place, then quietly revert. */
   var status = document.getElementById("copy-status");
 
   document.querySelectorAll(".copy").forEach(function (btn) {
@@ -1017,7 +1017,7 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
   });
 
   /* The odometer. A meter counting up is the subject's own gesture, so the
-     hero earns one — but it is strictly an enhancement: the markup already
+     hero earns one - but it is strictly an enhancement: the markup already
      holds the final figures, and nothing below ever leaves a number lower
      than where it started. */
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1059,8 +1059,8 @@ your app  ──►  <b>tokenmeter</b>  ──►  api.anthropic.com
     }, { threshold: 0.35 });
     io.observe(panel);
 
-    // If the observer never reports — a background tab, a browser that isn't
-    // compositing — the markup values simply stand. Give it one chance, then
+    // If the observer never reports - a background tab, a browser that isn't
+    // compositing - the markup values simply stand. Give it one chance, then
     // stop waiting rather than animating into a page nobody is looking at.
     setTimeout(function () { io.disconnect(); }, 4000);
   }
